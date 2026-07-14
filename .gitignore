@@ -1,0 +1,11 @@
+*.pyc
+__pycache__/
+.venv/
+node_modules/
+*.log
+*.bak.*
+secrets/
+*-token
+*.env
+.credentials.json
+tmp/

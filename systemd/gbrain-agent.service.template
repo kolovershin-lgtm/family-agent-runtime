@@ -1,0 +1,34 @@
+[Unit]
+Description=gbrain-{{SLUG}} {{ROLE}} MCP ({{MODEL_HINT}})
+After=postgresql.service network.target
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=gbrain
+Group=gbrain
+WorkingDirectory=/opt/gbrain
+Environment=PYTHONPATH=/opt/gbrain
+Environment=MCP_PORT={{PORT}}
+EnvironmentFile=/etc/gbrain-{{SLUG}}/secrets.env
+ExecStart=/opt/gbrain/.venv/bin/python -m services.{{SERVICE_MODULE}}.server
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ReadWritePaths=/opt/gbrain-{{SLUG}}/vault /var/log/gbrain-{{SLUG}} /var/lib/gbrain-{{SLUG}}
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+MemoryMax={{MEMORY_MAX}}
+
+[Install]
+WantedBy=multi-user.target

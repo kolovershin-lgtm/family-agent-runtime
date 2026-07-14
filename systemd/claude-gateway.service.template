@@ -1,0 +1,21 @@
+[Unit]
+Description=Claude Code Telegram Gateway ({{AGENT_NAME}} isolated)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{SYSUSER}}
+Group={{SYSUSER}}
+WorkingDirectory=/opt/claude-gateway-{{SLUG}}
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=HOME=/home/{{SYSUSER}}
+ExecStart=/opt/claude-gateway/.venv/bin/python /opt/claude-gateway-{{SLUG}}/gateway.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/opt/claude-gateway-{{SLUG}}/logs/gateway.log
+StandardError=append:/opt/claude-gateway-{{SLUG}}/logs/gateway.log
+
+[Install]
+WantedBy=multi-user.target

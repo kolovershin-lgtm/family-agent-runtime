@@ -88,11 +88,19 @@
 - **Deliverable:** `scripts/backup.sh` + cron + первый успешный запуск.
 
 **Задача 5: git-репозитории для Оли и Евы.**
-- По образцу того, как Boss сделал для AVA (см. gbrain vault → `github-repo-andrei.md`):
-  1. Спросить Илью, куда пушить (его аккаунт? отдельный? аккаунт Марианны?). **Не решать самому.**
-  2. После ответа — `gh auth` под соответствующим sysuser'ом, приватный репо, `.gitignore` (secrets/, credentials, media-inbound, transcripts).
-  3. Первый push workspace'а.
-- **Deliverable:** два репо + runbook «git операции» в vault каждого + audit-log.
+
+Решение владельца (Илья, 2026-07-14): оба репо — под аккаунтом Андрея `Android1872` (тот же, что уже используется для `andrei-vault`). Приватные. Одна GitHub-подписка на семью, одна кредитка (её нет, GitHub free), одно место наблюдения.
+
+Шаги:
+1. По образцу `andrei-vault` (см. `/opt/gbrain/vault/70-runbooks/github-repo-andrei.md`) создать приватные репо в аккаунте Android1872:
+   - `andrei-vault-olya` — workspace Оли
+   - `andrei-vault-eva` — workspace Марианны
+2. Авторизация: gh device-flow с аккаунта Android1872 из sysuser'а `olyagw`, потом из `mariannagw`. Токены раскладываются в их локальные `~/.config/gh/hosts.yml` (mode 600).
+3. `.gitignore` идентичный `andrei-vault`: secrets/, .credentials.json, .claude/{projects,sessions,shell-snapshots,backups}/, media-inbound/, *.log, .venv/, node_modules/.
+4. Первый push workspace'а каждой.
+5. **Проверка секретов ПЕРЕД push:** `git ls-files | grep -iE "token|secret|credential"` должен вернуть 0 строк. Если нет — abort.
+
+Deliverable: два приватных репо + runbook «git операции» в vault каждой + audit-log.
 
 ### P3 — Ротация / гигиена
 
@@ -180,8 +188,8 @@
 3. **Пользователь-оркестратор:** `claudegw` (AVA). Добавляется в группу `family-runtime-admin`.
 4. **Update-механизм:** только к подписанным тегам. Произвольные commit'ы применяться не будут (защита от подмены).
 5. **Параллельная работа:** AVA может писать root-независимые скрипты (system-health, backup.sh, POLICY.md, morning-digest) параллельно с P0-Задачей 0. Каждый — отдельный PR.
+6. **Репо Оли и Евы (P2-Задача 5):** оба приватных, в аккаунте Android1872 (тот же, где `andrei-vault`).
 
 ## Открытые вопросы (эскалировать Boss'у по мере подхода)
 
-- **Куда пушить репо Оли/Евы (P2-Задача 5)** — Илья ещё не решил. **Промежуточный дефолт:** локальные снапшоты в `/var/backups/family-runtime/<agent>/YYYY-MM-DD.tar.gz` (retention 14 дней). Когда владелец захочет GitHub — переключимся.
 - **Верификация тегов (P0-Задача 0):** старт с вариантом C (GitHub API sha-check), позже — GPG-подпись Boss'а.

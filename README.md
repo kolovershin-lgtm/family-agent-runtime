@@ -8,25 +8,25 @@
 
 ```
 family-agent-runtime/
-├── README.md                     ← этот файл
-├── TASK-FOR-AVA.md               ← ТЗ (что достроить, приёмки, приоритеты)
+├── README.md                              ← этот файл
+├── TASK-FOR-AVA.md                        ← ТЗ (что достроить, приёмки, приоритеты)
+├── install.SKELETON.sh                    ← первичная установка на VPS (один root-заход)
 ├── docs/
-│   └── architecture.md           ← общая схема и инварианты безопасности
-├── seeds/                        ← рабочие эталоны из edgelab (готовы к копированию)
-│   ├── system_health.py
+│   └── architecture.md                    ← общая схема и инварианты безопасности
+├── seeds/                                 ← рабочие эталоны из edgelab (готовы к копированию)
+│   ├── system_health.py                     health, rotation, backup, guard, status
 │   ├── agent_status.sh
 │   ├── recent-md-guard.sh
-│   ├── trim-hot.sh
-│   ├── rotate-warm.sh
-│   ├── compress-warm.sh
-│   ├── memory-rotate.sh
+│   ├── trim-hot.sh · rotate-warm.sh · compress-warm.sh · memory-rotate.sh
 │   └── backup.sh
-├── scripts/                      ← новые скрипты (SKELETON = каркас, AVA дописывает)
+├── scripts/                               ← новые скрипты (SKELETON = каркас, AVA дописывает)
+│   ├── family-runtime-update.SKELETON.sh    apt-подобный update до подписанных тегов
 │   ├── provision-agent-clone.SKELETON.sh
 │   └── deprovision-agent-clone.SKELETON.sh
-├── templates/                    ← шаблоны с {{plchlder}}
+├── templates/
 │   ├── POLICY.template.md
-│   └── CLAUDE.template.md
+│   ├── CLAUDE.template.md
+│   └── sudoers.template                     whitelist FAMILYRT для group family-runtime-admin
 ├── systemd/
 │   ├── gbrain-agent.service.template
 │   └── claude-gateway.service.template
@@ -36,13 +36,20 @@ family-agent-runtime/
 
 ## Идея работы
 
-1. На целевом VPS: `git clone` в `/opt/family-runtime/`.
-2. `sudo ./install.sh` — раскладывает seeds в `/usr/local/bin/`, templates в
-   `/opt/family-runtime/templates/`, ставит systemd-таймеры.
-3. Дальше — команды `provision-agent-clone`, `system-health`, `agent-status`,
-   `runtime-rollback` доступны как sudo whitelist агенту-оркестратору (AVA).
-4. Обновления: `git pull && sudo ./upgrade.sh` — идемпотентно, применяет новые
-   миграции и обновляет скрипты, не трогает существующих агентов.
+1. На целевом VPS: `git clone` в `/opt/family-runtime/current/`.
+2. **Один root-заход:** `sudo ./install.sh --orchestrator-user <user> --apply`
+   — создаёт группу `family-runtime-admin`, ставит sudoers-whitelist,
+   раскладывает симлинки в `/usr/local/sbin/`, ставит cron-задачи,
+   применяет все pending миграции gbrain.
+3. Дальше agent-оркестратор (AVA) работает автономно через whitelist:
+   `sudo system-health`, `sudo provision-agent-clone`, `sudo family-runtime-update` и т.д.
+   Никакого `sudo bash`, `sudo apt`, `sudo systemctl` — блокировано.
+4. **Обновления:** оркестратор запускает `sudo family-runtime-update` — скрипт
+   делает `git pull`, проверяет что HEAD == **подписанный тег** (не произвольный
+   commit), применяет новые миграции, обновляет симлинки. Если тег не проходит
+   верификацию — отказ.
+5. **Root возвращается только** когда появляется качественно новый примитив,
+   не покрытый пакетом (напр., новая семья, новый архитектурный слой).
 
 ## Кому что читать
 

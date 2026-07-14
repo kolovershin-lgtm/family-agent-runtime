@@ -1,0 +1,25 @@
+# /etc/sudoers.d/family-runtime — installed by install.sh
+# All commands must be validated by `visudo -c` before installation.
+# NEVER edit directly on the target — regenerate via install.sh / family-runtime-update.
+
+Cmnd_Alias FAMILYRT = \
+    /usr/local/sbin/system-health, \
+    /usr/local/sbin/system-health --json, \
+    /usr/local/sbin/system-health --alert, \
+    /usr/local/sbin/agent-status, \
+    /usr/local/sbin/provision-agent-status, \
+    /usr/local/sbin/provision-agent-clone, \
+    /usr/local/sbin/deprovision-agent-clone, \
+    /usr/local/sbin/family-runtime-update, \
+    /usr/local/sbin/family-runtime-update --dry-run, \
+    /usr/local/sbin/backup, \
+    /usr/local/sbin/backup --initial, \
+    /usr/local/sbin/recent-md-guard, \
+    /usr/local/sbin/morning-digest
+
+%family-runtime-admin ALL=(root) NOPASSWD: FAMILYRT
+
+Defaults!FAMILYRT log_output
+Defaults!FAMILYRT log_input
+Defaults!FAMILYRT env_reset
+Defaults!FAMILYRT !visiblepw

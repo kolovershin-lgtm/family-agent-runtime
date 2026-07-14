@@ -34,7 +34,22 @@
 
 ## Чего не хватает (в порядке приоритета — от самого критичного)
 
-### P0 — Тихие сбои становятся громкими
+### P0 — Пакетный root (снимает возврат к Boss'у по каждой мелочи)
+
+**Задача 0: install.sh + family-runtime-update + sudoers whitelist.**
+
+Ключевая инвестиция. Без неё каждая последующая P0/P1/P4 задача упирается в мой root-заход. С ней — Boss делает root один раз (install.sh), дальше AVA автономна через `sudo family-runtime-update` до подписанных тегов.
+
+- Дописать `install.SKELETON.sh` (см. 8 TODO-блоков в файле).
+- Дописать `scripts/family-runtime-update.SKELETON.sh` (см. 6 TODO-блоков в файле).
+- Верификация тега — вариант C для старта (сравнение sha с `gh api ... /refs/tags/<tag>`). Позже — на GPG.
+- Проверить весь флоу локально в docker/lxc-контейнере: install → создать fake-агента → update до v0.0.2 → rollback.
+- **Приёмка:** Boss на VPS Андрея делает `sudo ./install.sh --orchestrator-user claudegw --apply` — после этого AVA может `sudo family-runtime-update --dry-run` и `sudo system-health` без пароля, ни к одной другой sudo-команде доступа нет.
+- **Deliverable:** PR + тесты + описание того, что произойдёт при `install.sh` (contract Boss читает и валидирует до запуска).
+
+Только после мержа P0-0 → всё остальное.
+
+### P1 — Тихие сбои становятся громкими
 
 **Задача 1: миграция swarm-канала.**
 - Применить `migrations/2026-06-25-swarm-require-ack.sql` во всех трёх БД (`gbrain`, `gbrain_olya`, `gbrain_marianna`).
@@ -61,7 +76,7 @@
 - Cron каждые 15 минут. Если `recent.md > 40KB` — tail последних 200 строк + бэкап полного файла в `~/.claude-lab/backups/recent-md/YYYY-MM-DD-HH-MM.md.gz`.
 - **Deliverable:** cron + первая проверка вручную + запись в audit-log.
 
-### P1 — Восстановление
+### P2 — Восстановление
 
 **Задача 4: backup.sh на VPS Андрея.**
 - Взять `seeds/backup.sh`, адаптировать пути. Что бэкапится:
@@ -79,7 +94,7 @@
   3. Первый push workspace'а.
 - **Deliverable:** два репо + runbook «git операции» в vault каждого + audit-log.
 
-### P2 — Ротация / гигиена
+### P3 — Ротация / гигиена
 
 **Задача 6: memory-rotation набор.**
 - Взять `seeds/{trim-hot,rotate-warm,compress-warm,memory-rotate}.sh`.
@@ -87,7 +102,7 @@
 - Адаптировать `AGENT_WORKSPACE` под трёх агентов.
 - **Deliverable:** три cron-строки + первый прогон + запись в audit-log.
 
-### P3 — Governance
+### P4 — Governance
 
 **Задача 7: POLICY.md для семьи Андрея.**
 - Взять `templates/POLICY.template.md` за основу. Заполнить под Андрея:
@@ -106,7 +121,7 @@
   root-совершений (через sudo).
 - **Deliverable:** helper `scripts/audit.sh log <event>` + вызов из всех скриптов.
 
-### P4 — Автономный provisioning (та часть, ради которой всё)
+### P5 — Автономный provisioning (та часть, ради которой всё)
 
 **Задача 9: провижининг нового агента одной командой.**
 - Реализовать `scripts/provision-agent-clone.SKELETON.sh` полностью
@@ -118,7 +133,7 @@
 - **Тест:** dry-run + apply на fake-агенте `testbot` + verify + deprovision. Затем — на реальном (по запросу Ильи/Андрея).
 - **Deliverable:** три работающих скрипта + sudoers + tests/provision-e2e.sh + runbook «как построить нового агента» в vault AVA.
 
-### P5 — Ежедневный дайджест
+### P6 — Ежедневный дайджест
 
 **Задача 10: утренний дайджест Андрею в TG.**
 - Cron 08:15 МСК (не 8:00) — AVA собирает и отправляет:
@@ -158,9 +173,15 @@
 
 ---
 
-## Открытые вопросы (эскалировать Boss'у до начала работы)
+## Решения владельца (уже приняты)
 
-1. **Куда пушить репозитории Оли и Евы** — под кем аккаунт (Илья / отдельный семейный / Марианна для своего)?
-2. **install.sh / upgrade.sh** — писать здесь или взять из существующего эталона у Ильи? (Скорее всего — писать здесь по мере роста, сначала руками.)
-3. **Как AVA получит sudo-whitelist в первый раз** — Boss ставит `/etc/sudoers.d/claudegw-provision` вручную (root-действие), после чего AVA работает автономно.
-4. **Пакет `family-agent-runtime` на VPS Андрея — где живёт**: `/opt/family-runtime/` (стандарт) или `/home/claudegw/family-runtime/` (домашняя область AVA)?
+1. **install.sh + family-runtime-update + sudoers whitelist** — один пакетный root, чтобы AVA дальше не тыкалась в Boss'а по каждой мелочи. Реализуется в P0-Задаче 0 (новый первый пункт).
+2. **Место установки:** `/opt/family-runtime/current/` (git-клон), симлинки в `/usr/local/sbin/`.
+3. **Пользователь-оркестратор:** `claudegw` (AVA). Добавляется в группу `family-runtime-admin`.
+4. **Update-механизм:** только к подписанным тегам. Произвольные commit'ы применяться не будут (защита от подмены).
+5. **Параллельная работа:** AVA может писать root-независимые скрипты (system-health, backup.sh, POLICY.md, morning-digest) параллельно с P0-Задачей 0. Каждый — отдельный PR.
+
+## Открытые вопросы (эскалировать Boss'у по мере подхода)
+
+- **Куда пушить репо Оли/Евы (P2-Задача 5)** — Илья ещё не решил. **Промежуточный дефолт:** локальные снапшоты в `/var/backups/family-runtime/<agent>/YYYY-MM-DD.tar.gz` (retention 14 дней). Когда владелец захочет GitHub — переключимся.
+- **Верификация тегов (P0-Задача 0):** старт с вариантом C (GitHub API sha-check), позже — GPG-подпись Boss'а.

@@ -51,11 +51,23 @@
 
 ### P1 — Тихие сбои становятся громкими
 
-**Задача 1: миграция swarm-канала.**
-- Применить `migrations/2026-06-25-swarm-require-ack.sql` во всех трёх БД (`gbrain`, `gbrain_olya`, `gbrain_marianna`).
+**Задача 1: миграция swarm-канала + миграция ingest_worker.**
+
+Две миграции в одной ветке (`feature/P1-1-schema-catchup`):
+
+**(a) swarm require_ack** — уже готов файл `migrations/2026-06-25-swarm-require-ack.sql`.
 - До применения: `\d delivery_outbox` — 11 колонок. После: 13.
 - Verify: тест `swarm.notify` от AVA к Boss'у (то что раньше 500'ило) возвращает `ok=true`.
-- **Deliverable:** PR с миграцией + tests/swarm-notify-smoke.sh + запись в audit-log.
+
+**(b) ingest_worker retry columns** — написать новую миграцию `migrations/2026-07-14-ingest-worker-retry.sql`:
+- Добавить в `embedding_jobs` колонки: `attempts int not null default 0`, `max_attempts int not null default 3`, `error_message text`, `next_retry_at timestamptz`.
+- Индекс `idx_embedding_jobs_next_retry` on `(next_retry_at)` where `status='pending'`.
+- Verify: `\d embedding_jobs` показывает новые колонки.
+
+**Отдельный upstream-issue (не входит в PR миграции):**
+Boss обнаружил root cause крэш-лупа `gbrain-ingest-worker`: код делает `INSERT` в `embedding_jobs (doc_id, status)` без `ON CONFLICT`. При попытке пометить job для уже существующего `(doc_id, status)` — `UniqueViolationError` → crash. Правильный фикс — `INSERT ... ON CONFLICT (doc_id, status) DO UPDATE SET updated_at = NOW(), attempts = attempts + 1`. **Открыть issue в upstream `gbrain` (не в family-runtime).** Boss временно починил данные (удалил конфликтующие записи 14.07), но код нужно патчить.
+
+**Deliverable:** PR с двумя миграциями + tests/swarm-notify-smoke.sh + tests/ingest-worker-retry-smoke.sh + запись в audit-log. После merge — Boss применяет обе миграции ко всем БД (`gbrain`, `gbrain_olya`, `gbrain_marianna`) и подтверждает в issue.
 
 **Задача 2: system_health.py адаптирован.**
 - Взять `seeds/system_health.py` за основу. Он рассчитан на 5 агентов в `~/.claude-lab/*`.
@@ -188,7 +200,10 @@ Deliverable: два приватных репо + runbook «git операции
 3. **Пользователь-оркестратор:** `claudegw` (AVA). Добавляется в группу `family-runtime-admin`.
 4. **Update-механизм:** только к подписанным тегам. Произвольные commit'ы применяться не будут (защита от подмены).
 5. **Параллельная работа:** AVA может писать root-независимые скрипты (system-health, backup.sh, POLICY.md, morning-digest) параллельно с P0-Задачей 0. Каждый — отдельный PR.
-6. **Репо Оли и Евы (P2-Задача 5):** оба приватных, в аккаунте Android1872 (тот же, где `andrei-vault`).
+6. **Репо Оли и Евы (P2-Задача 5):** оба приватных, в аккаунте Android1872 (тот же, где `andrei-vault`). Перед первым push — спросить у Оли и Марианны согласие: их рабочие папки поедут в приватный GitHub у папы. `.gitignore` уберёт секреты, но личные заметки — их данные, они решают.
+7. **Единая инсталляция (Илья, 2026-07-14):** family-agent-runtime разворачиваем на одном VPS Андрея (95.179.243.18) как общую инфру для трёх агентов. `install.sh` может быть узким под этот VPS (Ubuntu 24.04, Postgres 16, sysuser claudegw), без универсальности. Разнесение на разные VPS — открытый горизонт, не сейчас.
+8. **Модель работы через форк (Илья, 2026-07-14):** AVA работает в форке `Android1872/family-agent-runtime`, PR в `kolovershin-lgtm/family-agent-runtime`. Boss ревьюит в GitHub UI, мержит, тегает. AVA — writer в свой форк, reader в main Boss'а. Через `sudo family-runtime-update` подтягивает подписанные теги.
+9. **Миграции gbrain (P1-Задача 1):** AVA пишет миграцию + tests. После merge PR Boss применяет её на живую БД сам, отдельного разрешения не нужно (это инфраструктура, не приватка).
 
 ## Открытые вопросы (эскалировать Boss'у по мере подхода)
 
